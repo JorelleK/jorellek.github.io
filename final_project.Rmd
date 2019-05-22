@@ -1,0 +1,357 @@
+---
+title: 'U.S Homicide Report from 1980 to 2014 '
+author: 'By: Jorelle Kebeto'
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This dataset was chosen because all over the World and particularly in the United States, homicides happen everyday. It is crucial to know that crime rate tends to increase, so people should be more careful and always be in a position where they are safe. This tutorial will be an analysis of the homicide reports data in the United State from 1980 to 2014. The tutorial has three main parts which are for the first part data collection, preparation and cleaning, the second part is about how to analyse and visualize the data, and the last part is the linear regression model which will allow us to analyse and verify the null hypothesis.
+
+## Libraries
+Here we have all the libraries used in analyzing this dataset. Some are used to analyze the dataset while others are added to make the data more appealing.
+We use the function suppressPackageStartupMessages() to disable messages upon loading a package.
+
+```{r, warning=FALSE}
+#data manipulation
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(stringr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(dplyr))
+
+#aesthetics
+suppressPackageStartupMessages(library(broom))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggthemes))
+suppressPackageStartupMessages(library(leaflet))
+suppressPackageStartupMessages(library(htmltools))
+suppressPackageStartupMessages(library(rvest))
+suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(data.table))
+
+```
+
+
+## Part 1: Data Preparation
+
+First, we need to download the dataset at https://www.kaggle.com/jyzaguirre/us-homicide-reports. The file downloaded will be in the form of a CSV(Comma-separated value) named database.csv. Once, the data is downloaded, we can easily read it using read_csv.
+
+```{r, warning=FALSE}
+#Load the csv file and make a dataframe
+homicide_data <- read_csv("database.csv")
+#view(homicide_data)
+#Display the first 6 rows of the table
+head(homicide_data)
+```
+
+## 1.1 Data Overview
+
+The Homicide report data contains some important information to analyze such as time, locations, crime types, victims, Weapons, and perpetrator.
+
+## 1.2 Data Tyding
+
+Since there are some columns that will not be used in the analysis process, it is preferable to drop these to make the data easy to manipulate. In this particular case, we decide to drop the Agency Code, Agency Name, Agency Type, Record Source and Month.
+
+```{r, warning=FALSE}
+#Delete columns
+homicide_data <- homicide_data[,-c(2,3,4,8,15,19,24)]
+
+#Convert Year type from double to int
+homicide_data['Year'] <- type.convert(homicide_data['Year'])
+head(homicide_data)
+```
+
+For the Homicide Report data analysis, we need to create two tables containing information about victims and perpetrator respectively. 
+
+```{r, warning=FALSE}
+#Create Victim table
+victim_data <- homicide_data %>%
+  select('Record ID', 'City', 'State', 'Year', 'Crime Type', 'Victim Sex', 'Victim Age', 'Victim Race', 'Victim Count')
+#Convert the Victim's Age from type double to int
+victim_data['Victim Age'] <- type.convert(victim_data['Victim Age'])
+
+
+head(as.tibble(victim_data))
+```
+
+Looking at the original data, we notice that there are several cases that were not solved in the column Crime Solved and the perpetrator's age is zero. This means the identity of the perpetrator is unknown, but there are victims. Since we are creating the table for perpetrators, we will cut off the rows with unsolved cases and where the perpetrator's age is zero.
+
+```{r, warning=FALSE}
+#Create perpetrator table
+perpetrator_data <- homicide_data %>%
+  select('Record ID', 'City', 'State', 'Year', 'Crime Type', 'Crime Solved', 'Perpetrator Sex', 'Perpetrator Age', 'Perpetrator Race', 'Weapon', 'Perpetrator Count')
+
+#Remove any cases that were unsolved
+perpetrator_data <- perpetrator_data[perpetrator_data$`Crime Solved` == 'Yes',]
+
+#Remove cases where perpetrator's age is 0
+perpetrator_data <- perpetrator_data[perpetrator_data$'Perpetrator Age' != 0,]
+
+#Change the type of Perpetrator Age column from double to integer
+   perpetrator_data['Perpetrator Age'] <- type.convert(perpetrator_data['Perpetrator Age'])
+ 
+head(as.tibble(perpetrator_data))
+```
+
+## Part 2: Exploratory Data Analysis
+
+The Homicide report data is ready to be analyzed. In this part, we will visualize the data that we cleaned up with some plots and maps and explain the trend of homicides in the United States from 1980 to 2014.
+
+## 2.1 Homicide per Year
+
+We would like to analyze the number of homicides that happened throughout between 1980 and 2014 inclusive. First, we will write a query to compute the number of homicides that are taking place every year.
+
+## 2.1.1 Extract the Number of Hommicide per Year
+
+The question to ask in this case is what is the best way to count the number of homicides of a specific year?
+To answer this question, we will use the function count() and select() to find the result. Documentation about count and select functions can be found here: https://www.rdocumentation.org/packages/plyr/versions/1.8.4/topics/count 
+https://www.rdocumentation.org/packages/dplyr/versions/0.7.8/topics/select
+
+```{r}
+#Compute number of homicides per year
+num_hom_year <- homicide_data %>%
+  count(Year) %>%
+  select(Year, CountOfHomicides = n) %>%
+  arrange(Year)
+head(num_hom_year)
+```
+
+## 2.1.2 Visualization of the Number of Homicide per Year
+
+After Extraction of the number of homicide per year, the next step is to plot the data from the previous table. 
+
+```{r}
+num_hom_year %>% ggplot(mapping=aes(x=Year, y=CountOfHomicides)) +
+  geom_line(size = 2) +
+  labs(x="Year", y="Number of Homicide", title="Distribution of the Number of Homicides as a function of Year")
+```
+
+The number of homicides is decreasing by year for the most parts. The number of homicides reached its maximum between 1990 and 1995. After these years, the number becomes smaller up to the most recent year which is 2014 in this dataset.
+
+## 2.1.3 Mean and Standard Deviation of the Number of Homicide
+
+```{r}
+#Mean of the number of homicides per year
+ mean(num_hom_year$CountOfHomicides)
+#Standard deviation of the number of homicides per year
+sd(num_hom_year$CountOfHomicides)
+```
+So, the average of homicides is: 18241.54 homicides per year and, the standard deviation is 2986.447
+
+We can conclude that in average, the number of homicides per year is pretty high and the difference number of homicides between year is large as well.
+
+## 2.2 Homicide per State
+
+After finding the number of homicides per year, we will analyze the number of homicides per state in the United States. 
+
+## 2.2.1 Extract the Number of Homicide per State
+
+Here we follow the same idea as how to compute the number of homicides per states.
+```{r}
+#Compute number of homicides per year
+num_hom_state <- homicide_data %>%
+  count(State) %>%
+  select(State, CountOfHomicides = n) %>%
+  arrange(State)
+head(num_hom_state)
+```
+
+## 2.2.2 Graph of the Number of Homice per State
+
+Here we will first find the top 10 states where the number of homicide is very high, then we will create a histogram to visualize the distribution of homicide for the top 10. 
+```{r}
+#Compute top 10 states with the highest number of homicide
+top_10_hom_state <- homicide_data %>% 
+  count(State) %>% 
+  mutate(`CountOfHomicides` = n, Rank = rank(desc(n))) %>% 
+  select(-n) %>%
+  arrange(Rank) %>% 
+  top_n(n = 10,wt = desc(Rank))
+top_10_hom_state
+```
+Let's display the result using a histogram.
+```{r}
+top_10_hom_state %>%
+  ggplot(mapping=aes(x=State, y=CountOfHomicides, fill=CountOfHomicides)) + 
+  geom_bar(stat="sum") +
+  theme(axis.text.x = element_text(angle=90, vjust=1.2))
+```
+
+When we look at the graph, we see that the state with the largest number of homicides from 1980 to 2014 is California. 
+
+Now let's create a map for our dataset. Since the original dataset does not contain information about the longitude and lattitude of each state, we downloaded a new dataset here https://www.kaggle.com/washimahmed/usa-latlong-for-state-abbreviations containing those information.
+
+## 2.2.3 Map of the Number of Homicides in the U.S
+
+```{r}
+#Read state lat and long file
+state_lat_lng <- read_csv("statelatlong.csv")
+
+#Renaming the column 
+state_lat_lng <- set_colnames(state_lat_lng,c("Abbr", "Lat", "Long", "State"))
+
+#Swap position of column so that the first column is State
+state_lat_lng <- state_lat_lng[,c(4, 1,2,3)]
+head(state_lat_lng)
+
+#Another way to Swap position of column with state as the first column
+col_idx <- grep("State", names(homicide_data))
+homicide_dat <- homicide_data[, c(col_idx, (1:ncol(homicide_data))[-col_idx])]
+
+#merging the tables
+num_hom_state_merg <- merge(num_hom_state, state_lat_lng, by="State", all=TRUE)
+head(num_hom_state_merg)
+
+data_merg <- merge(homicide_data, num_hom_state_merg, by="State", all=TRUE)
+head(data_merg)
+  
+```
+
+Now let's get a sample of 2000 entities from our dataset and use a map to display specific information about a random person in a particular state. The map gives the information about the number of homicides in that state, the type of weapon the person used, whether or not the crime was solved, the perpetrator race, and age.
+
+```{r, warning=FALSE}
+df <- data_merg %>%
+  sample_n(2000)
+
+map_hom_state <- leaflet(df) %>%
+  addTiles() %>%
+  addAwesomeMarkers(~Long, ~Lat,  
+                    popup = paste("Number of Homicides:", df$CountOfHomicides, "<br>",
+                                  "Weapon:", df$Weapon, "<br>",
+                                  "Crime Solved:", df$`Crime Solved`, "<br>",
+                                  "Perpetrator Race:", df$`Perpetrator Race`, "<br>",
+                                  "Perpetrator Age:", df$`Perpetrator Age`, "<br>"
+                                  ),
+                    label = ~~htmlEscape(df$State),
+                    labelOptions = labelOptions(noHide = F, direction = "left", style = list(
+        "color" = "black",
+        "font-family" = "serif",
+        "font-style" = "bold",
+        "box-shadow" = "3px 3px rgba(0,0,0,0.25)",
+        "font-size" = "20px",
+        "border-color" = "rgba(0,0,0,0.5)"
+      ))) %>%
+  
+  setView(lat=48, lng=-102, zoom=4)
+  
+map_hom_state
+
+```
+
+## 2.3 Number of Perpetrators per Age
+
+ Now let's analyze the number of perpetrators per age. In this part, we will understand why perpetrator of a certain age acts as murders.
+ 
+## 2.3.1 Extract the Number of Homicides per Age
+
+We will use the same strategy used in 2.1.1 using the perpetrator table instead.
+```{r}
+#Compute number of homicides per age
+num_hom_age <- perpetrator_data %>%
+  count(`Perpetrator Age`) %>%
+  select(`Perpetrator Age`, CountOfHomicides = n) 
+  #arrange(Perp)
+head(num_hom_age)
+```
+
+## 2.3.2 Graph of the Number of Homicides per Age
+
+```{r}
+#Compute top 10 states with the highest number of homicide
+num_hom_age %>%
+  ggplot(mapping=aes(x=`Perpetrator Age`, y=CountOfHomicides, fill=CountOfHomicides)) + 
+  geom_bar(stat="identity") +
+  labs(x="Age", y="Number of Homicides", title="The Distribution of the Number of Homicides vs Age")+
+  
+  theme(axis.text.x = element_text(angle=90, vjust=1.2))
+```
+
+
+Between the age of 18 to 30 we notice a large number of perpetrators. After the age of 30, the number of perpetrators decreases as the age increases. Looking at the graph, we see that the age with the top number of homicides is 19.
+
+## Part 3: Linear Regression and Hypothesis Test
+
+This part will focus on linear regression. To do a linear regression, we need data that is collected already. We are going to take a linear regression of the number of homicides across the year and compare it to another regression which is a function of State.
+
+## 3.1 Linear Regression Model
+
+Here, we will create a linear regression model for The Number of Homicide as a function of Year.
+```{r}
+#Linear regression model for number of homicides vs years
+lmfit <- lm(formula = CountOfHomicides ~ Year, data=data_merg)
+tidy(lmfit)
+```
+
+According to the table, on average the number of homicides decreases every year by 167.
+From the same table, the p-value is less than 0.05, this implies that we reject the hypothesis of no relationship between the number of homicides and the year.
+
+## 3.2 Linear Regression Model with Interaction
+
+The second linear regression model is for the number of homicides with a term for interaction between state and year. Here we will use the table that we obtained previously.
+
+```{r}
+#Linear regression model with interaction
+lmfit2 <- lm(formula = CountOfHomicides ~ Year*State, data=data_merg)
+inter_data <- tidy(lmfit2)
+head(inter_data)
+```
+From the table, we notice the p-value is significantly close to 0.
+
+## 3.3 Graph of the Linear Regression on Homicide per Year
+
+Now let's graph the regression.
+```{r}
+num_hom_year %>% ggplot(mapping=aes(x=Year, y=CountOfHomicides)) +
+  geom_line(size = 2) +
+  geom_smooth(method=lm) +
+  labs(x="Year", y="Number of Homicide", title="Number of Homicides vs Year Linear Regression")
+```
+
+## 3.4 Hypothesis Testing
+
+To verify our hypothesis, we will use the ANOVA function to perform an F-test.
+
+## a) Linear regression model without interaction
+
+```{r}
+m1 <- anova(lmfit)
+m1
+```
+
+## b) Linear regression model with interaction
+
+```{r}
+anova(lmfit, lmfit2)
+
+```
+
+Based on the F-test information of the two models, we can conclude that The interaction model is significantly better than the year-only model because the F-value in the interaction model(year*state) is smaller than the year-only model and residual value for the second model is less than the one in the first model.Therefore, the model with the interaction between year and state will give the most accurate prediction.
+
+## Conclusion
+The Homicide report in the United States is important because it is good to be aware of how many lives are taken away by homicides and how the homicides are distributed across the year and different states. This tutorial is a guide of how to analyze medium datasets and can help the audience to be more informed about the trends of homicides in the U.S.
+
+After our analysis, we can conclude that the umber of homicides differ per year and per state. An important aspect of this analysis is that we could see that the number of homocides was decreasing as the years were imcreasing. The state with the highest number of homicides is California from 1980 to 2014.
+
+## References
+
+Homicide report dataset:https://www.kaggle.com/jyzaguirre/us-homicide-reports
+
+U.S longitude and latitude data for each state: https://www.kaggle.com/washimahmed/usa-latlong-for-state-abbreviations
+
+R documentation: https://www.rdocumentation.org/packages/methods/versions/3.5.3/topics/Documentation
+
+The map widget: https://rstudio.github.io/leaflet/map_widget.html
+
+Linear Regression Model: http://www.hcbravo.org/IntroDataSci/bookdown-notes/linear-regression.html
+
+
+
+
+
+
